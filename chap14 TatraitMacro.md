@@ -1075,7 +1075,7 @@ macro_rules! test {
         #[test]
         fn $func() {
             for sz in 0..10 {
-                // 生成sz个 vec![$x, $x, ...]
+                // 生成有sz个$x元素的 vec![$x, $x, ...]
                 let mut x: Vec<_> = iter::repeat($x).take(sz).collection();
                 let y: Vec<_> = iter::repeat($y).take(sz).collection();
                 let z: Vec<_> = iter::repeat($z).take(sz).collection();
@@ -1128,4 +1128,213 @@ macro_rules! assert_equal_len {
     }
 }
 ```
+
+`tt`（token tree，标记树）指示符表示运算符和标记
+
+## [DSL（领域专用语言）](https://rustwiki.org/zh-CN/rust-by-example/macros/dsl.html#dsl领域专用语言)
+
+DSL 是 Rust 的宏中集成的微型 “语言”，自己编语言
+
+```rust
+macro_rules! calculate {
+    (eval $e: expr) => {
+       	{
+            let val: usize = $e;
+            println!("{} = {}", stringify!($e), val);
+        }
+    }
+}
+calculate!(eval 1+2)
+calculate!{
+    eval (1+2) * (3/5)
+}
+```
+
+## [可变参数接口](https://rustwiki.org/zh-CN/rust-by-example/macros/variadics.html#可变参数接口)
+
+通过 `$(...),+`实现可变参数数目
+
+```rust
+macro_rules! calculate {
+    (eval $e:expr) => {
+        println!("{}", $e);
+    };
+    (eval $e:expr, $(eval $es:expr),+) => {
+        calculate!(eval $e);
+        calculate!($(eval $es),+);
+    }
+}
+```
+
+# [错误处理](https://rustwiki.org/zh-CN/rust-by-example/error.html#错误处理)
+
+错误处理（error handling）是**处理**可能发生的**失败**情况的过程。如果在失败基础上继续运行，会造成问题。
+
+显式的 `panic` 主要用于测试，以及处理不可恢复的错误
+
+`Option` 类型是为了值是可选的、或者缺少值并不是错误的情况
+
+- 寻找 父目录时，`/` 和 `C:` 这样的目录就没有父目录，这应当并不是一个错误
+- 在测试或者原型开发中
+    - `unwrap` 可用于原型开发，也可以用于能够确定 `Option` 中一定有值 的情形
+    - `expect` 更有用，因为它允许你指定一条错误信息，以免万一还是出现 了错误
+    - `unwrap` 然后使用 `expect`
+
+当错误有可能发生，且应当由调用者处理时，使用 `Result`
+
+## [`panic`](https://rustwiki.org/zh-CN/rust-by-example/error/panic.html#panic)
+
+最简单的错误处理机制
+
+- 打印一个错误消息
+- 回退（unwind）任务
+- 显式地在错误条件下调用 `panic`
+- 当公主收到蛇这件不合适的礼物时，我们就让程序 `panic`
+
+```bash
+thread 'main' panicked at 'aaaaaaa!!', src/main.rs:14:5
+```
+
+## [`Option` 和 `unwrap`](https://rustwiki.org/zh-CN/rust-by-example/error/option_unwrap.html#option-和-unwrap)
+
+如果公主期待收到礼物，却没收到
+
+使用标准库中 `Option<T>`（ “选项/存在”）的枚举类型，它表现为：
+
+- `Some(T)`：存在一个属于 `T` 类型的元素
+- `None`：不存在相应元素
+
+通过 `match` 显式地处理，或使用 `unwrap` 隐式地处理
+
+隐式处理要么 返回 `Some` 内部的元素，要么就 `panic`。
+
+平民（commoner）处理 `gift`
+
+```rust
+//gift: Option<&str>
+match gift {
+    Some("snake") => println!("snake"),
+    Some(inner) => println!("{}", inner),
+    None => printlin!("None"),
+}
+```
+
+公主处理 `gift`
+
+- 没收到礼物就会 `panic`（恐慌），用 `unwrap`
+
+```rust
+// `unwrap` 在接收到 `None` 时将返回 `panic`
+let inside = gift.unwrap();
+```
+
+- 见到蛇就会 `panic`（恐慌）
+
+    ```rust
+    if inside == "snake" {panic!("AAAaaa!!!");}
+    ```
+
+    ### [组合算子：`map`](https://rustwiki.org/zh-CN/rust-by-example/error/option_unwrap/map.html#组合算子map)
+
+    [组合算子](https://doc.rust-lang.org/book/glossary.html#combinators)（combinator），以 模块化的风格来管理控制流
+
+    `Option` 有一个内置方法 `map()`，用于简单映射
+
+    - `Some -> Some`
+    - `None -> None`
+
+`map()` 以链式调用的方式来简化 `match` 语句
+
+削皮。如果没有食物，就返回 `None`。否则返回削好皮的食物
+
+```rust
+fn 削皮(food: Option<Food>) -> Option<已去皮> {
+    match food {
+        Some(food) => Some(已去皮(food)),
+        None => None,
+    }
+}
+```
+
+削皮切块烹饪一条龙，用 `Option::map`
+
+```rust
+fn process(food: Option<Food>) -> Option<Cooked> {
+    food.map(|f| Peeled(f)) //削皮
+    	.map(|Peeled(f)| Chopped(f)) //切块
+    	.map(|Chopped(f)| Cooked(f)) //烹饪
+}
+```
+
+当 `f = None` 时， `Option::map(None) -> None`，`None`就会一直传下去
+
+### [组合算子：`and_then`](https://rustwiki.org/zh-CN/rust-by-example/error/option_unwrap/and_then.html#组合算子and_then)
+
+如果以返回类型是 `Option<T>` 的函数作为 `map()` 的参数，会导致出现嵌套形式 `Option<Option<T>>`
+
+比如上一节的示例
+
+```rust
+Some(food).map(|f| Peeled(f)).map(|f| Chopped(f))
+```
+
+就会变成 `Option<Option<Chopped>>`
+
+引入 `and_then()` 来处理这种情况，在某些语言中它叫做 `flatmap`
+
+`and_then()` 使用被 `Option` 包裹的值来调用其**输入函数**并返回结果
+
+- `Some(t).and_then(f) -> Option::and_then(f(t))`
+- None -> None
+
+通过原材料和食谱做出一道菜
+
+```rust
+fn cookable(food: Food) -> Option<Food> {
+    have_ingredients(food).and_then(have_recipe)
+}
+```
+
+## [结果 `Result`](https://rustwiki.org/zh-CN/rust-by-example/error/result.html#结果-result)
+
+[`Result`](https://doc.rust-lang.org/std/result/enum.Result.html) 是 [`Option`](https://doc.rust-lang.org/std/option/enum.Option.html) 类型的更丰富的版本，描述的是可能的**错误**而不是可能的**存在**
+
+`Result<T，E>` 可以有两个结果
+
+- `Ok<T>`：找到 `T` 元素
+- `Err<E>`：找到 `E` 元素，`E` 即表示错误的类型
+
+ `parse()` 返回一个 `Result` 表示可能的失败
+
+`Result::unwrap()`
+
+- `Ok(t) ->` 举出元素 `t`
+-  `Err("ParseIntError { kind: InvalidDigit }") -> panic(e)`
+
+### [`Result` 的 `map`](https://rustwiki.org/zh-CN/rust-by-example/error/result/result_map.html#result-的-map)
+
+一般地把错误返回给调用者，以决定回应错误的正确方式
+
+- `Result::and_then(self, f)`，`and_then`把`self`中的`t`取出来了
+    - `Ok(t) => f(t)`
+    - `Err(e) => Err(e)`
+- `Result::map(self, f)`，`map`把`self`中的`t`取出来了
+    - `Ok(t) => Ok(f(t))`
+    - `Err(e) => Err(e)`
+
+```rust
+use std::num::ParseIntError;
+
+fn multiply(num1: &str, num2: &str) -> Result<i32, ParseIntError> {
+    num1.parse::<i32>().and_then(|num1| {
+        num2.parse::<i32>().map(|num2| num1 * num2)
+    })
+}
+```
+
+### [给 `Result` 取别名](https://rustwiki.org/zh-CN/rust-by-example/error/result/result_alias.html#给-result-取别名)
+
+同一模块中的错误常常会有相同的 `Err` 类 型
+
+单个别名就能简便地定义**所有**相关的 `Result`
 
