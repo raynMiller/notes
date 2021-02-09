@@ -49,7 +49,7 @@ C4 --> D9[UnkownTypeException]
 
 `Javac` 对异常的处理要求，将异常类分为2类
 
-- **非检查异常**（``unckecked exception`）：
+- **非检查异常**（`unckecked exception`）：
     - `Error` 和 `RuntimeException` 以及他们的子类
     - `javac`在编译时，不会提示和发现这样的异常，不要求在程序处理这些异常
     - 对于这些异常，我们应该修正代码，而不是去通过异常处理器处理
@@ -138,7 +138,7 @@ C4 --> D9[UnkownTypeException]
 
     - **resumption model of exception handling**（恢复式异常处理模式 ）
         - 异常处理后，控制流恢复到异常抛出点接着执行
-    - **termination model of exception handling**（终结式异常处理模式）
+    - **xtermination model of exception handling**（终结式异常处理模式）
         - 让执行流恢复到处理了异常的 `catch` 块后接着执行
 
 ### throws 函数声明
@@ -188,7 +188,7 @@ public void foo() throws ExceptionType1 , ExceptionType2 ,ExceptionTypeN
 
 
 
-# [cpp异常详解](https://www.cnblogs.com/sld666666/p/4090418.html)
+# [cpp 的异常处理机制实现](https://www.cnblogs.com/sld666666/p/4090418.html)
 
 ## 异常介绍
 
@@ -200,7 +200,7 @@ public void foo() throws ExceptionType1 , ExceptionType2 ,ExceptionTypeN
 - 把它传递给上一级的函数来解决
 - 上一级解决不了，再逐级上传
 - 直到最高一级还无法处理的话，运行系统会自动调用系统函数 `terminate`
-    - 由它调用abort终止程序
+    - 由它调用 `abort` 终止程序
 - 这样的异常处理方法使得异常引发和处理机制分离，而不在同一个函数中处理
 - 这使得底层函数只需要解决实际的任务，而不必过多考虑对异常的处理
 - 而把异常处理的任务交给上一层函数去处理
