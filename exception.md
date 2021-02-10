@@ -282,6 +282,97 @@ public void foo() throws ExceptionType1 , ExceptionType2 ,ExceptionTypeN
                         - 异常处理器必须找到异常发生时函数帧上所有存活的局部变量
                             - 然后调用它们的析构器
 
+# python 让函数返回结果的技巧
+
+### 抛出异常，而不是返回结果与错误
+
+比如下面的代码，`create_item()` 函数返回 `item` 和 `errmsg`
+
+```python
+def create_item(name):
+    if len(name) > MAX_LENGTH_OF_NAME:
+        return None, 'name of item is too long'
+    if len(CURRENT_ITEMS) > MAX_ITEMS_QUOTA:
+        return None, 'items is full'
+    return Item(name=name), ''
+```
+
+调用函数：
+
+```python
+item, errmsg = create_item(name)
+if errmsg:
+    print(f'create item failed: {err_msg}')
+else:
+    print(f'item<{name}> created')
+```
+
+这种模式的多层调用会增加方法处理错误的成本。 `python` 更鼓励**使用异常来进行错误流程处理**
+
+引入异常之后的代码重构：
+
+- 创建一个异常的基础类
+
+    ```python
+    class CreateItemError(Exception):
+        """创建 Item 失败的异常"""
+        pass
+    ```
+
+- 重构 `create_item()` 函数
+
+    ```python
+    def create_item(name):
+        if len(name) > MAX_LEN_OF_NAME:
+            raise CreateItemError("name of item is too long")
+        if len(CURRENT_ITEMS) > MAX_ITEMS_QUOTA:
+            raise CreateItemmError("items is full")
+        
+        return Item(name=name)
+    ```
+
+- 调用 `create_item()` 函数
+
+    ```python
+    try:
+        item = create_item(name)
+    except CreateItemError as e:
+        print(f'创建项目失败:{e.errmsg}')
+    else:
+        print(f'item<{name}> created!')
+    ```
+
+    抛出异常和 `(item, errmsg)` 的区别：
+
+    - 只返回 `Item` 类型或引发异常
+    - 异常在捕获前会不断往**调用栈**上层报，所以调用方可以不处理异常，由上层处理
+    - 文档必须说明要抛出的异常类型
+
+### python 中对返回 None 的约定
+
+`None` 通常表示**应该存在但是缺失的东西**。 `python` 中函数返回 `None` 通常有以下 3 中情况：
+
+1. 默认返回值
+
+    对于没有返回值的操作型函数，比如 `list.append()`
+
+2. 意料之中的可能没有的值
+
+    调用函数就是让它去尝试做某件事情，比如 `re.search`
+
+3. 作为调用失败时表示错误结果的值
+
+    比如 `c` 语言常用的返回 `-1` 的情况
+
+对于情况 `3` 不同的语言有不同的倾向（用异常还是返回值），在 `python` 中关键在：**函数名称与 None 之间是否有一种意料之中的暗示**(*“拿不到任何结果”是否是该函数名称含义里的一部分*)
+
+比如：
+
+- `re.search()` 是有可能没有结果的，所以可以返回 `None`
+- `create_user_from_name()` 不适合返回 `None`，要坚持用 `None`，改名为：`create_user_or_none()`明示
+
+对于 `create_user_from_name()`，在 `python` 中应该用抛出异常来代替 `None`。**因为返回不了正常结果不是函数意义的一部分**，这就代表函数出现了**意料之外**的状况，而且还可以在异常中包含抛出异常的原因，这是 `None` 做不到的。
+
 # Python 的异常处理
 
 异常处理工作由“捕获”和“抛出”两部分组成
@@ -964,6 +1055,67 @@ with create_query("AAA") as q:
 3. 最后执行`yield`之后的语句，打印出`</h1>`。
 
 因此，`@contextmanager` 让我们通过编写 `generator` 来简化上下文管理。
+
+### contextmanager
+
+这个函数是一个 [decorator](https://docs.python.org/zh-cn/3/glossary.html#term-decorator) ，它可以定义一个支持 [`with`](https://docs.python.org/zh-cn/3/reference/compound_stmts.html#with) 语句上下文管理器的工厂函数， 而不需要创建一个类或 [`__enter__()`](https://docs.python.org/zh-cn/3/reference/datamodel.html#object.__enter__) 与 [`__exit__()`](https://docs.python.org/zh-cn/3/reference/datamodel.html#object.__exit__) 方法
+
+下面是一个抽象的示例，展示如何确保正确的资源管理:
+
+```python
+from contextlib import contextmanager
+
+@contextmanager
+def 管理资源(*args, **kwargs):
+    资源 = 请求资源(*args, **kwargs)
+    try:
+        yield 资源
+    finally:
+        释放资源(资源)
+
+>>> with 管理资源(timeout=3600) as 资源:
+... 	# 使用资源
+```
+
+当 `yield` 生成资源后，`with` 中的语句开始执行。
+
+### 使用 contextmanager 创建自己的异常处理
+
+1. 在每个模块中创建属于这个模块的异常类
+
+    ```python
+    class OpError(Exception):
+        pass
+    ```
+
+2. 通过 `contextmanager` 创建异常环境管理器
+
+    ```python
+    @contextmanager
+    def fail_raise_error(errmsg):
+        try:
+            yield
+        except Exception as err:
+            raise OpError(errmsg) from err
+    ```
+
+3. 使用自定义的异常环境管理器，使得逻辑代码更清晰
+
+    ```python
+    with fail_raise_error("读取Fpga寄存器"):
+        status = readFpga(step["reg"])
+    ```
+
+    - 相当于
+
+        ```python
+        try:
+            status = readFpga(step["reg"])
+        except Except as err:
+            raise OpErr(errmsg) form err
+        ```
+
+        
 
 ### context 的几种设计模式
 
