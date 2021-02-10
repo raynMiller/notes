@@ -111,44 +111,115 @@ def func():
     func1()
     ```
 
-### 类装饰器
+### 装饰器类
 
 使用类装饰器可以依靠内部的 `__call__` 方法，当使用 `@` 形式把装饰器加到函数上时，就会调用 `__call__` 方法
 
-- 类装饰器
+- 装饰器类
 
     ```python
-    class cls_dcrt:
-        def __init__(self, func):
-            self._func = func
-        
-        def __call__(self):
-            print("类装饰器正在运行......")
-            self._func()
-            print("类装饰器运行结束")
+    class Op:
+        def __init__(self, cfgpath):
+            """指定配置文件路径
+    
+            Args:
+                cfgpath  (str): 配置文件路径
+            """
+            self.cfg = self.load_yaml(cfgpath)
+            self.helper = Helper()
+            self.functions = self.cfg["functions"]
+    
+        def regs(self, func):
+            """根据配置文件中键值对应的操作流程操作寄存器"""
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+    			# 省略......
+                inst = args[0] # 读取实例
+                readFpga = eval(f'inst.{self.functions["readFpga"]}')
+                writeFpga = eval(f'inst.{self.functions["writeFpga"]}')
+    
+                for no, step in enumerate(inst.cfg[category][op], start=1):
+                    if step.get("desc") is not None:
+                        logging.info("step [{}]: {}".format(no, step["desc"]))
+    
+                    if step["op"] == "b":
+                        # 省略......
+                    elif step["op"] == "p":
+                        # 省略......
+                    elif step["op"] == "r":
+    					# 省略......
+                    elif step["op"] == "w":
+                        # 省略......
+                    elif step["op"] == "s":
+                        # 省略......
+                    elif step["op"] == "j":
+                        # 省略......
+                    elif step["op"] == "c":
+                        # 省略......
+    
+                return status
+    
+            return wrapper
+    
+        @staticmethod
+        def load_yaml(filepath):
+            """读取 yaml 配置文件内容
+    
+            Args:
+                filepath (str): yaml 配置文件路径
+            """
+            currpath = os.path.abspath(__file__)
+            basename = os.path.dirname(currpath)
+            cfg_file = os.path.join(basename, filepath)
+            with open(cfg_file, encoding="utf8") as f:
+                cfg = yaml.load(f, yaml.SafeLoader)
+            return cfg
     ```
 
 - 安装类装饰器
 
-    ```python
-    @Foo
-    def func1():
-        print("函数1")
-    ```
+    - 实例化一个装饰器
+
+        ```python
+        op = Op("cfg/xt8.yaml")
+        ```
+
+    - 使用装饰器
+
+        ```python
+        @property
+        @op.regs
+        def fpga_version(self, *args, **kwargs):
+            pass
+        ```
 
 - 调用函数
 
     ```python
-    func1()
+    self.fpga_version()
     ```
 
-    ```bash
-    类装饰器运行中......
-    函数1内打印
-    类装饰器运行结束
+- 本质
+
+    ```python
+    fpga_version = property(op.regs(fpga_version))
+    fpga_version(*args, **kwargs)
     ```
 
-### 函数的元信息
+    - 装饰器是把函数当成参数
+
+        ```python
+        @op.regs
+        def fpga(self, *args, **kwargs):
+            pass
+        
+        # 更新修饰的函数
+        fpga = op.regs(fpga)
+        # 执行新的函数
+        fpga(*args, kwargs)
+        ```
+
+###                                                                                                                                                    函数的元信息
 
 通过装饰器修饰的函数，会丢失原函数的源信息，比如：`docstirng, __name__, args`
 
@@ -205,5 +276,58 @@ print("{}".format(add_mul.__doc__))
 当前函数：add_mul
 func(10) = 110
 函数[add_mul]
+```
+
+## 装饰器的还原
+
+### 装饰器
+
+```python
+def log_with_param(text):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+           	print('call %s():' % func.__name__)
+            print('args = {}'.format(*args))
+            print('log_param = {}'.format(text))
+            return func(*args, **kwargs)
+       	return wrapper
+    return decorator
+```
+
+### 使用装饰器
+
+```python
+@log_with_param("param")
+def test_with_param(p):
+    print(f"{test_with_param.__name__}")
+```
+
+### 装饰器还原
+
+- 一步还原
+
+    ```python
+    log_with_param("param")(test_with_param)("I'm a param")
+    ```
+
+- 多步还原
+
+    ```python
+    # 传入装饰器的参数，并接收返回的decorator函数
+    decorator = log_with_param("param")
+    # 传入test_with_param函数
+    wrapper = decorator(test_with_param)
+    # 调用装饰器函数
+    wrapper("I'm a param")
+    ```
+
+输出结果：
+
+```bash
+call test_with_param():
+args = I'm a param
+log_param = param
+test_with_param
 ```
 

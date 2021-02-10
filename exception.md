@@ -282,3 +282,806 @@ public void foo() throws ExceptionType1 , ExceptionType2 ,ExceptionTypeN
                         - 异常处理器必须找到异常发生时函数帧上所有存活的局部变量
                             - 然后调用它们的析构器
 
+# Python 的异常处理
+
+异常处理工作由“捕获”和“抛出”两部分组成
+
+捕获”指的是使用 `try ... except` 包裹特定语句，妥当的完成错误流程处理。而恰当的使用 `raise` 主动“抛出”异常，更是优雅代码里必不可少的组成部分。
+
+`python` 把错误分成两种：*语法错误* 和 *异常*
+
+## 语法错误
+
+也成为**解析错误**，语法的错误是由某个 `token` 引起或在这里被检测出错误。比如：
+
+```python
+while True print("Hello")
+   		   ^
+```
+
+在 `print` 这个 `token`  处检测到了错误
+
+## 异常
+
+`python` 中的异常是指在执行时引发的错误。执行过程中没有被程序处理的异常会引发如下的错误信息：
+
+```python
+>>> 10 * (1/0)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+ZeroDivisionError: division by zero
+```
+
+- 异常类型
+
+    这里的 `ZeroDivisionError: division by zero` 说明执行中检查到了 `ZeroDivisionError` 类型的错误。并且 `python` 根据异常的类型还提供了这种异常类型的详细说明：`division by zero`
+
+- 异常发生的现场环境（上下文）
+
+    异常信息的前面，`python` 以堆栈回溯的形式显示发生异常时的现场（上下文）
+
+### python 内置异常
+
+在 Python 中，所有异常都派生自 [`BaseException`](https://docs.python.org/zh-cn/3.8/library/exceptions.html#BaseException) 的类的实例。而且内置异常都会具有一个提示导致错误详细原因的“关联值”，关联值通常会作为参数被传递给异常类的构造器
+
+当在 [`except`](https://docs.python.org/zh-cn/3.8/reference/compound_stmts.html#except) 或 [`finally`](https://docs.python.org/zh-cn/3.8/reference/compound_stmts.html#finally) 子句中引发（或重新引发）异常时，`__context__` 会被自动设为所捕获的最后一个异常；如果新的异常未被处理，则最终显示的回溯信息将包括**原始的异常**和**最后的异常**。
+
+当引发一个新的异常时，隐式的异常上下文可以通过使用带有 [`raise`](https://docs.python.org/zh-cn/3.8/reference/simple_stmts.html#raise) 的 [`from`](https://docs.python.org/zh-cn/3.8/reference/simple_stmts.html#from) 来补充一个显式的原因:
+
+```python
+raise new_exc from origin_exc
+```
+
+跟在 [`from`](https://docs.python.org/zh-cn/3.8/reference/simple_stmts.html#from) 之后的表达式必须为一个异常或 `None`。 它将在所引发的异常上被设置为 `__cause__`。让旧异常在 `__context__` 中保持可用状态以便在调试时进行内省
+
+```
+{%plantuml%}
+@startmindmap
+* BaseException
+++ SystemExit
+++ KeyboardInterrupt
+++ GeneratorExit
+++ Exception
++++_ StopIteration
++++_ StopAsyncIteration
++++_ ArithmeticError
+++++_ FloatingPointError
+++++_ OverflowError
+++++_ ZeroDivisionError
++++_ AssertionError
++++_ AttributeError
++++_ BufferError
++++_ EOFError
++++_ ImportError
+++++_ ModuleNotFoundError
++++_ LookupError
+++++_ IndexError
+++++_ KeyError
++++_ MemoryError
++++_ NameError
+++++_ UnboundLocalError
++++_ OSError
+++++_ BlockingIOError
+++++_ ChildProcessError
+++++_ ConnectionError
++++++_ BrokenPipeError
++++++_ ConnectionAbortedError
++++++_ ConnectionRefusedError
++++++_ ConnectionResetError
+++++_ FileExistsError
+++++_ FileNotFoundError
+++++_ InterruptedError
+++++_ IsADirectoryError
+++++_ NotADirectoryError
+++++_ PermissionError
+++++_ ProcessLookupError
+++++_ TimeoutError
++++_ ReferenceError
++++_ RuntimeError
+++++_ NotImplementedError
+++++_ RecursionError
++++_ SyntaxError
+++++_ IndentationError
++++++_ TabError
++++_ SystemError
++++_ TypeError
++++_ ValueError
+++++_ UnicodeError
++++++_ UnicodeDecodeError
++++++_ UnicodeEncodeError
++++++_ UnicodeTranslateError
++++_ Warning
+++++_ DeprecationWarning
+++++_ PendingDeprecationWarning
+++++_ RuntimeWarning
+++++_ SyntaxWarning
+++++_ UserWarning
+++++_ FutureWarning
+++++_ ImportWarning
+++++_ UnicodeWarning
+++++_ BytesWarning
+++++_ ResourceWarning
+@endmindmap
+{%plantuml end%}
+```
+
+## 处理异常
+
+### `try` 的工作原理
+
+- 执行 *try 子句*
+
+- `except`
+
+    - 如果没有异常发生，则跳过 *except 子句* 
+
+    - 发生了异常
+
+        - 则跳过该子句中剩下的部分
+
+        - `except` 异常匹配
+
+            - 异常的类型和 [`except`](https://docs.python.org/zh-cn/3.8/reference/compound_stmts.html#except) 关键字后面的异常匹配
+
+                - 执行 except 子句
+                - 继续执行 [`try`](https://docs.python.org/zh-cn/3.8/reference/compound_stmts.html#try) 语句之后的代码
+
+            - 不匹配
+
+                - 将异常传递到外部的 [`try`](https://docs.python.org/zh-cn/3.8/reference/compound_stmts.html#try) 语句中
+                - 如果没有找到处理程序
+                    - 是一个 *未处理异常*
+                    - 执行将停止并显示堆栈回溯消息
+
+            - 规则
+
+                - `except` 匹配类和它的基础类 
+                    - 比如 `class B(A)`， `class A`
+                    - `except B`：可以匹配类 `B` 和它的基础类 `A`
+
+            - 可以在`except`处理端中打印错误消息，然后重新引发异常
+
+                ```python
+                import sys
+                
+                try:
+                    f = open('myfile.txt')
+                    s = f.readline()
+                    i = int(s.strip())
+                except OSError as err:
+                    print("OS error: {0}".format(err))
+                except ValueError:
+                    print("Could not convert data to an integer.")
+                except:
+                    print("Unexpected error:", sys.exc_info()[0])
+                    raise
+                ```
+
+- `else`
+
+    - 当 `except`没有出现时，执行 `else`
+
+        ```python
+        for arg in sys.argv[1:]:
+            try:
+                f = open(arg, "r")
+            except OSError:
+                print("不能打开", arg)
+            else:
+                print(arg, 'has', len(f.readlines()), 'lines')
+                f.close()
+        ```
+
+### 异常参数
+
+异常的关联值，也称为异常 *参数* 
+
+`except`子句可以在异常名称后面指定一个变量。这个变量和一个异常实例绑定，它的参数存储在 `instance.args` 中。
+
+```python
+try:
+    raise Exception("参数1", "参数2")
+except Exception as inst:
+    print(type(inst))	# <class 'Exception'>
+    print(inst.args)   	# ('参数1', '参数2')
+    print(inst)			# ('参数1', '参数2')
+    x, y = inst.args	
+    print("x = ", x)	# x =  参数1
+    print("y = ", y)	# y =  参数2
+
+```
+
+### 异常中的异常
+
+异常处理程序不仅处理 try 子句中遇到的异常，还处理 try 子句中调用（即使是间接地）的函数内部发生的异常
+
+```python
+def div_zero():
+    x = 1 / 0
+    
+try:
+    div_zero()
+except ZeroDivisionError as err:
+    print("处理除0异常")
+```
+
+## 抛出异常
+
+`raise`  直接引发异常
+
+```python
+raise NameError("名字不对")
+>>> NameError：名字不对
+```
+
+[`raise`](https://docs.python.org/zh-cn/3.8/reference/simple_stmts.html#raise) 唯一的参数就是要抛出的异常。如果 `raise ValueError` 参数是一个类，它会隐式实例化:
+
+```python
+raise ValueError  # 相当于 raise ValuleError()
+```
+
+我们可以接收异常后，不处理再已发
+
+```python
+try:
+    raise NameError("名字")
+except NameError:
+    print("突然出现了一个异常")
+    raise
+```
+
+结果：
+
+```bash
+突然出现了一个异常
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+NameError: 名字
+```
+
+## 用户自定义异常
+
+自定义异常通常直接或间接地从 [`Exception`](https://docs.python.org/zh-cn/3.8/library/exceptions.html#Exception) 类派生
+
+- 定义一个自己的异常类
+
+    ```python
+    class Error(Exception):
+        """当前模块的异常基础类"""
+        pass
+    ```
+
+- 创建子异常类针对不同的异常条件
+
+    - 输入异常
+
+        ```python
+        class InputError(Error):
+            def __init__(self, expr, message):
+                self.expr = expr
+                self.message = message
+        ```
+
+## [定义清理操作](https://docs.python.org/zh-cn/3.8/tutorial/errors.html#defining-clean-up-actions)
+
+`finally` 用于定义必须在所有情况下执行的清理操作
+
+```python
+try:
+    raise KeyboardInterrupt
+finally:
+    print("Good bye")
+```
+
+`finally` 子句作为 [`try`](https://docs.python.org/zh-cn/3.8/reference/compound_stmts.html#try) 语句结束前的最后一项任务被执行，不论 `try` 语句是否产生了异常都会被执行
+
+`finally` 的机制：
+
+- 在执行 `try` 子句期间发生了异常，但没有被某个 `except` 子句所处理
+
+    - 则该异常会在 `finally` 子句执行**之后**被**重新引发**
+
+- 异常也可能在 `except` 或 `else` 子句执行期间发生
+
+    -  同样地，该异常会在 `finally` 子句执行**之后**被**重新引发**
+
+- 在执行 `try` 语句时遇到一个 [`break`](https://docs.python.org/zh-cn/3.8/reference/simple_stmts.html#break), [`continue`](https://docs.python.org/zh-cn/3.8/reference/simple_stmts.html#continue) 或 [`return`](https://docs.python.org/zh-cn/3.8/reference/simple_stmts.html#return) 语句
+
+    - 则 `finally` 子句将在执行它们之前被执行
+
+- 如果 `finally` 子句中包含一个 `return` 语句
+
+    - 则返回值将来自 `finally` 的某个 `return` 语句的返回值
+    - 而非来自 `try` 子句的 `return` 语句的返回值
+
+    ```python
+    def return_bool():
+        try:
+            return True
+        finally:
+            return False
+    ```
+
+    结果：
+
+    ```bash
+    >>> return_bool()
+    False
+    ```
+
+    在实际应用程序中，[`finally`](https://docs.python.org/zh-cn/3.8/reference/compound_stmts.html#finally) 子句对于释放外部资源（例如文件或者网络连接）非常有用，无论是否成功使用资源。
+
+# Java 的异常
+
+当程序违反了 `Java` 编程语言的语义约束时，`Java` 虚拟机将此错误作为异常向程序发出信号
+
+面对**违规行为**的处理（一个例子是试图在数组的边界之外建立索引）
+
+- `abort` 强制性地终止程序
+    - 一些编程语言和它们的实现对这种错误的反应是强制性地终止程序
+- 以不可预测行为继续
+    - 另一些编程语言允许实现以任意或不可预测的方式作出反应
+- Java
+    - 这两种方法都不符合 `Java SE` 平台的设计目标：提供可移植性和健壮性
+    - `Java` 规定，当语义约束被违反时，将抛出一个异常
+    - 并将控制权从异常发生点转移到程序员指定的地方
+    - 程序也可以使用 `throw` 语句显式地抛出异常
+        - 显式使用 `throw` 语句提供了一种替代方法
+            - 即通过返回值来表达错误条件的老式风格
+            - 这种值经常被调用者忽略或不检查
+            - 导致程序不健壮，表现出不理想的行为
+
+每个异常都由 `Throwable` 类或它的一个子类的实例来表示。这样的对象可以用来将信息从异常发生点携带到捕获它的处理程序。处理程序由 `try` 语句的 `catch` 子句建立
+
+在抛出异常的过程中，``JVM` 会立刻逐一跳过当前线程中已经开始但未完成执行的任何表达式、语句、方法和构造函数调用、初始化器和字段初始化表达式。这个过程一直持续到找到一个处理程序。如果没有找到这样的处理程序，那么该异常可能会被不捕获异常的上级处理程序所处理。因此，我们会尽一切努力避免让异常得不到处理。
+
+## 异步异常
+
+大多数异常都是由于发生异常的线程操作而同步发生的，并且是在程序中指定可能导致这种异常的某个点发生的。而异步异常则是指在程序执行过程中的任何一点都有可能发生的异常。
+
+异步异常的发生只是由于:
+
+- `stop` 方法的调用。
+- `JVM` 内部错误或资源限制，使其无法实现 `Java` 编程语言的语义。在这种情况下，抛出的异步异常是`VirtualMachineError`子类的一个实例
+
+`Java SE` 平台允许在抛出异步异常之前发生少量但有约束的执行。
+
+异步异常很少见，但如果要生成高质量的机器代码，正确理解它们的语义是必要的。
+
+上面提到的延迟是允许的，以允许优化的代码在遵守Java编程语言语义的同时，在实际处理这些异常的点检测和抛出这些异常。一个简单的实现可能会在每个控制转移指令的点上轮询异步异常。由于程序的大小是有限的，这就为检测异步异常的总延迟提供了一个约束。由于在控制转移之间不会发生异步异常，因此代码生成器有一定的灵活性，可以在控制转移之间重新排序计算，以获得更高的性能。
+
+## 异常的编译期检查
+
+方法或构造函数的执行时可能产生异常。这种编译期检查异常处理程序的存在是为了减少没有被正确处理的异常的数量。
+
+## 异常检测
+
+如果一个方法或构造函数体可以抛出一些异常类 `E`，而 `E` 是一个检查异常类，并且 `E` 不是该方法或构造函数的 `throws` 子句中声明的某个类的子类，那么这是一个编译时错误。
+
+如果一个 `lambda` 体可以抛出一些异常类E，当E是一个被检查的异常类，并且E不是lambda表达式所针对的函数类型的throws子句中声明的某个类的子类时，这是一个编译时错误。
+
+如果一个命名类或接口的类变量初始化器或静态初始化器(§8.7)可以抛出一个检查的异常类，那么这是一个编译时错误。
+
+如果一个命名类的实例变量初始化器(§8.3.2)或实例初始化器(§8.6)可以抛出一个检查过的异常类，这是一个编译时错误，除非命名类至少有一个显式声明的构造函数，并且异常类或它的一个超类在每个构造函数的throws子句中显式声明。
+
+## 掌握Python异常处理
+
+### 只做最精确的异常捕获
+
+异常捕获的目的，不是去捕获尽可能多的异常。我们从一开始就坚持：**只做最精准的异常捕获**：
+
+- 永远只捕获那些可能会抛出异常的语句块
+- 尽量只捕获精确的异常类型，而不是模糊的 `Exception`
+
+### 别让异常破坏抽象一致性
+
+- 让模块只抛出与当前抽象层级一致的异常
+    - 比如 `image.processer` 模块应该抛出自己封装的 `ImageOpenError` 异常
+- 在必要的地方进行异常包装与转换
+    - 应该在贴近高层抽象（视图 View 函数）的地方，将图像处理模块的 `ImageOpenError` 低级异常包装转换为 `APIErrorCode` 高级异常
+
+在文件 `proj/util/image/processor.py` 中：
+
+```python
+# 定义本模块的异常类
+class ImgOpenError(Exception):
+    pass
+
+def process_image():
+    try:
+        image = Image.open(fp)
+    except Exception as e:
+        raise ImgOpenError(exc=e)
+```
+
+在 `proj/app/views.py` 文件中：
+
+```python
+def view_func():
+    try:
+        process_image(fp)
+    except ImgOpenError:
+        raise error.INVALID_IMG_UPLOADED
+```
+
+除了应该避免抛出**高于**当前抽象级别的异常外，我们同样应该避免泄露**低于**当前抽象级别的异常
+
+比如 `requests` 模块，它请求页面出错时所抛出的异常，并不是它在底层所使用的 `urllib3` 模块的原始异常，而是通过 `requests.exceptions` 包装过一次的异常。
+
+这样做同样是为了保证异常类的抽象一致性。因为 urllib3 模块是 requests 模块依赖的底层实现细节，而这个细节有可能在未来版本发生变动。所以必须对它抛出的异常进行恰当的包装，避免未来的底层变更对 `requests` 用户端错误处理逻辑产生影响。
+
+### 异常处理不应该喧宾夺主
+
+异常捕获要精准、抽象级别要一致。但是**异常处理逻辑太多，扰乱了代码核心逻辑**
+
+比如一个处理用户上传头像的视图函数。这个函数针对每件事都做了异常捕获。如果做某件事时发生了异常，就返回对用户友好的错误到前端。
+
+```python
+def upload_avatar(request):
+    """用户上传新头像"""
+    try:
+        avatar_file = request.FILES['avatar']
+    except KeyError:
+        raise error_codes.AVATAR_FILE_NOT_PROVIDED
+
+    try:
+       resized_avatar_file = resize_avatar(avatar_file)
+    except FileTooLargeError as e:
+        raise error_codes.AVATAR_FILE_TOO_LARGE
+    except ResizeAvatarError as e:
+        raise error_codes.AVATAR_FILE_INVALID
+
+    try:
+        request.user.avatar = resized_avatar_file
+        request.user.save()
+    except Exception:
+        raise error_codes.INTERNAL_SERVER_ERROR
+    return HttpResponse({})
+```
+
+Python 语言提供了对付这类场景的工具：“上下文管理器（context manager）”，它配合 `with` 语句可以改善处理流程：
+
+- 创建一个环境管理器 `raise_api_error`
+
+    ```python
+    class raise_api_error:
+        def __init__(self, captures, code_name):
+            self.captures = captures
+            self.code = getattr(error_codes, code_name)
+            
+        def __enter__(self):
+            # 进入环境管理器
+            return self
+       
+    	def __exit__(self, exc_type, exc_val, exc_tb):
+            # 退出
+            # 环境抛出的
+            # 异常类型、异常值、错误栈
+            if exc_type is None:
+                return False
+            if exc_type == self.captures:
+                raise self.code from exc_val
+            return False
+    ```
+
+    在退出上下文时，会判断当前上下文中是否抛出了类型为 `self.captures` 的异常，如果有，就用 `APIErrorCode` 异常类替代它
+
+- 使用环境管理器
+
+    ```python
+    def upload_avatar(request):
+        with raise_api_error(KeyError, "AVATAR_FILE_NOT_PROVIDED"):
+            avatar_file = request.FILES["avatar"]
+        with raise_api_error(ResizeAvatarError, "AVATAR_FILE_INVALID"), \
+        		raise_api_error(FileTooLargeError, "AVATAR_FILE_TOO_LARGE"):
+                resized_avatar_file = resize_avatar(avatar_file)
+        with raise_api_error(Exception, "INTERNAL_SERVER_ERROR"):
+            request.user.avatar = resized_avatar_file
+            request.user.save()
+        return HttpResponse({})
+    ```
+
+    
+
+# 附录
+
+## raise 和 raise from 的区别
+
+`raise … from …` 会为异常对象设置 `__cause__` 属性表明异常的是由谁直接引起的。
+
+处理异常时发生了新的异常，在不使用 `from` 时更倾向于新异常与正在处理的异常没有关联。
+
+而 `from` 则是能指出新异常是因旧异常直接引起的。这样的异常之间的关联有助于后续对异常的分析和排查。`from` 语法会有个限制，就是第二个表达式必须是另一个异常类或实例
+
+比如：
+
+```python
+try:
+    print(1 / 0)
+except Exception as exc:
+    raise RuntimeError("自定义的 Runtime 异常")
+```
+
+结果：
+
+```bash
+Traceback (most recent call last):
+  File "test4.py", line 2, in
+    print(1 / 0)
+ZeropisionError: pision by zero
+ 
+#在处理上述异常的过程中，又发生了另一个异常情况
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "test4.py", line 4, in
+    raise RuntimeError("自定义的 Runtime 异常")
+RuntimeError: 自定义的 Runtime 异常
+```
+
+如果把 `raise` 改成 `raise ... from ...`
+
+```python
+try:
+    print(1 / 0)
+except Exception as exc:
+    raise RuntimeError("自定义的 Runtime 异常") from exc
+```
+
+结果
+
+```bash
+Traceback (most recent call last):
+  File "test4.py", line 2, in
+    print(1 / 0)
+ZeropisionError: pision by zero
+
+上述异常是造成以下异常的直接原因
+The above exception was the direct cause of the following exception:
+ 
+Traceback (most recent call last):
+  File "test4.py", line 4, in
+    raise RuntimeError("自定义的 Runtime 异常") from exc
+RuntimeError: 自定义的 Runtime 异常
+```
+
+## python 的路径
+
+应该用 `python -m xxx` 来执行 `xxx` 模块。这样 `xxx.py`  中的 `__name__` 和 `__package__` 都包含系统路径，这样在 `xxx.py` 中就可以通过相对路径 `.module` 来引用同级的 `module` 模块以及下一级的模块
+
+如果要引用上一级的模块，就需要 `python -m foo.xxx` 来执行模块，这样和 `foo` 统计的路径就可以包含到 `__x__` 的 `__package__` 中
+
+示例
+
+```bash
+$ tree
+
+sysroot
+├── pkg1
+│   ├── a.py
+│   ├── b.py
+│   ├── c.py
+└── pkg2
+    ├── d.py
+    ├── e.py
+```
+
+- `pkg1/a.py`
+
+    ```python
+    print(f"[file]: name: [{__name__}], package: [{__package__}]")
+    
+    if __name__ == "__main__":
+        print("这是 pkg1.a")
+        print(f"[main]: name: [{__name__}], package: [{__package__}]")
+    ```
+
+- `pkg2/d.py`
+
+    ```python
+    from ..pkg1 import a
+    
+    print(f"[file]: name: [{__name__}], package: [{__package__}]")
+    
+    if __name__ == "__main__":
+        print("这是 pkg2.d")
+        print(f"[main]: name: [{__name__}], package: [{__package__}]")
+    ```
+
+- 结果
+
+    ```bash
+    $ python -m sysroot.pkg2.d
+    
+    [file]: name: [sysroot.pkg1.a], package: [sysroot.pkg1]
+    [file]: name: [__main__], package: [sysroot.pkg2]
+    这是 pkg2.d
+    [main]: name: [__main__], package: [sysroot.pkg2]
+    ```
+
+包如果被安装之后，是放在 `python` 的系统路径下的，一般是 `site-packages` 目录下。在这个目录下的模块都可以被相对路径找到
+
+## python 的 contextlib 
+
+语句 "with"用来替代 `try/finally` 语句
+
+上下文管理器提供了 `__enter__()` 和  `__exit__()` 方法，这些方法在进入和退出 `with` 语句的主体时被调用。
+
+```python
+class Query:
+    def __init__(self, name):
+        self.name = name
+    def __enter__(self):
+        print("开始")
+        return self
+   	def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type:
+            print("Error")
+        else:
+            print("End")
+    def query(self):
+        print(f"查询{self.name}的信息")
+```
+
+使用：
+
+```python
+with Query("AAA") as q:
+    q.query()
+```
+
+编写 `__enter__` 和 `__exit__` 仍然很繁琐，因此 `Python` 的标准库 `contextlib` 提供了更简单的写法，上面的代码可以改写如下：
+
+```python
+from contextlib import contexmanager
+
+class Query:
+    def __init__(self, name):
+        self.name = name
+        
+    def query(self):
+        print(f"查询{self.name}的信息")
+
+@contextmanager
+def create_query(name):
+    print("开始")
+    q = Query(name)
+    yield q
+    print("结束")
+```
+
+使用：
+
+```python
+with create_query("AAA") as q:
+    q.query()
+```
+
+代码的执行顺序是：
+
+1. `with`语句首先执行`yield`之前的语句，因此打印出`<h1>`；
+2. `yield`调用会执行`with`语句内部的所有语句，因此打印出`hello`和`world`；
+3. 最后执行`yield`之后的语句，打印出`</h1>`。
+
+因此，`@contextmanager` 让我们通过编写 `generator` 来简化上下文管理。
+
+### context 的几种设计模式
+
+1. 确保在块开始获得的锁在块离开时被释放的模板
+
+    ```python
+    @contextmanager
+    def locked(lock):
+        lock.acquire()
+        try:
+            yield
+        finally:
+            lock.release()
+    ```
+
+    - 使用
+
+        ```python
+        with locked(myLock):
+            ......
+        ```
+
+        - 这里的代码是在持有 `myLock` 的情况下执行的
+
+        - 当代码块离开时，保证锁会被释放（即使是通过 `return` 返回或未捕获的异常返回）
+
+2. 不用生成器
+
+    ```python
+    class locked:
+        def __init__(self, clock):
+            self.lock = lock
+        def __enter__(self):
+            self.lock.acquire()
+        def __exit__(self, type, value, tb):
+            self.lock.release()
+    ```
+
+3. 打开文件的模板，确保文件在块离开时被关闭
+
+    ```python
+    @contextmanager
+    def opened(filename, mode='r'):
+        f = open(filename, mode)
+        try:
+            yield f
+        finally:
+            f.close()
+    ```
+
+    - 使用
+
+        ```bash
+        with opened("/etc/passwd") as f:
+        	for line in f:
+        		print(line.rstrip())
+        ```
+
+4. 用于提交或回滚数据库事务的模板
+
+    ```python
+    @contextmanager
+    def transaction(db):
+        db.begin()
+        try:
+            yield None
+        except:
+            db.rollback()
+            raise
+        else:
+            db.commit()
+    ```
+
+5. `stdout` 重定向模板
+
+    ```python
+    @contextmanager
+    def stdout_redirected(new_stdout):
+        save_stdout = sys.stdout
+        sys.stdout = new_stdtou
+        try:
+            yield
+        finally:
+            sys.stdout = save_stdout
+    ```
+
+    - 使用
+
+        ```python
+        with opened(filename, "w") as f:
+            with stdout_redirected(f):
+                print("hello world")
+        ```
+
+6.  `open()` 的变体，它返回一个错误条件
+
+    ```python
+    @contextmanager
+    def opened_w_error(filename, mode="r"):
+        try:
+            f = open(filename, mode)
+        except IOError as err:
+            yiled None, err
+        else:
+            try:
+                yield f, None
+            finally:
+                f.close()
+    ```
+
+    - 使用
+
+        ```python
+        with open_w_error("/etc/passwd", "a") as (f, err):
+            if err:
+                print("IOError", err)
+            else:
+                f.write("guido::0:0::/:/bin/sh\n")
+        ```
+
+        
